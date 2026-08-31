@@ -1,6 +1,7 @@
 import gql from 'graphql-tag';
 import { getRepoInfo } from './github/queries';
 import type { MyContext } from './index';
+import { pubsub, TOPICS } from './pubsub';
 
 export const typeDefs = gql`
   type WorkflowRun {
@@ -39,10 +40,22 @@ export const typeDefs = gql`
     name: String!
   }
 
+  type WorkflowRunEvent {
+    repo: String!
+    name: String!
+    status: String!
+    conclusion: String
+    createdAt: String!
+  }
+
   type Query {
     health: String!
     repository(owner: String!, name: String!): Repository
     repositories(repos: [RepoInput!]!): [Repository!]!
+  }
+
+  type Subscription {
+    workflowRunUpdated: WorkflowRunEvent!
   }
 `;
 
@@ -94,9 +107,12 @@ export const resolvers = {
       );
     },
   },
+  Subscription: {
+    workflowRunUpdated: {
+      subscribe: () => pubsub.asyncIterableIterator(TOPICS.WORKFLOW_RUN_UPDATED),
+    },
+  },
   Repository: {
-    // FIXED VERSION: uses DataLoader to batch all PR requests for this repo
-    // into a single GitHub API call, instead of one call per PR.
     pullRequestsWithReviews: async (
       parent: ReturnType<typeof formatRepo>,
       _args: unknown,
