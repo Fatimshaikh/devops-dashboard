@@ -17,7 +17,8 @@
     "dotenv": "^17.4.2",
     "graphql": "^16.14.2",
     "graphql-request": "^7.4.0",
-    "graphql-tag": "^2.12.7"
+    "graphql-tag": "^2.12.7",
+    "ioredis": "^6.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

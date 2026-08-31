@@ -1,5 +1,6 @@
 import { githubClient } from './client';
 import { gql } from 'graphql-request';
+import { withCache } from '../cache/withCache';
 
 const GET_REPO_INFO = gql`
   query GetRepoInfo($owner: String!, $name: String!) {
@@ -70,12 +71,16 @@ interface RepoInfoResponse {
   };
 }
 
-export async function getRepoInfo(owner: string, name: string) {
+async function fetchRepoInfo(owner: string, name: string) {
   const data = await githubClient.request<RepoInfoResponse>(GET_REPO_INFO, {
     owner,
     name,
   });
   return data.repository;
+}
+
+export async function getRepoInfo(owner: string, name: string) {
+  return withCache(`repo:${owner}/${name}`, () => fetchRepoInfo(owner, name));
 }
 
 const GET_PR_REVIEWS = gql`
