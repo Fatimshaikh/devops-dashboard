@@ -9,8 +9,12 @@ const GET_REPO_INFO = gql`
       stargazerCount
       forkCount
       url
-      pullRequests(states: OPEN) {
+      pullRequests(states: OPEN, first: 10) {
         totalCount
+        nodes {
+          number
+          title
+        }
       }
       defaultBranchRef {
         target {
@@ -45,6 +49,11 @@ interface CheckSuiteNode {
   } | null;
 }
 
+interface PullRequestNode {
+  number: number;
+  title: string;
+}
+
 interface RepoInfoResponse {
   repository: {
     name: string;
@@ -52,7 +61,7 @@ interface RepoInfoResponse {
     stargazerCount: number;
     forkCount: number;
     url: string;
-    pullRequests: { totalCount: number };
+    pullRequests: { totalCount: number; nodes: PullRequestNode[] };
     defaultBranchRef: {
       target: {
         checkSuites: { nodes: CheckSuiteNode[] };
@@ -67,4 +76,46 @@ export async function getRepoInfo(owner: string, name: string) {
     name,
   });
   return data.repository;
+}
+
+const GET_PR_REVIEWS = gql`
+  query GetPRReviews($owner: String!, $name: String!, $number: Int!) {
+    repository(owner: $owner, name: $name) {
+      pullRequest(number: $number) {
+        number
+        title
+        author {
+          login
+        }
+        reviews(first: 5) {
+          nodes {
+            state
+            author {
+              login
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+interface PRReviewsResponse {
+  repository: {
+    pullRequest: {
+      number: number;
+      title: string;
+      author: { login: string } | null;
+      reviews: { nodes: { state: string; author: { login: string } | null }[] };
+    };
+  };
+}
+
+export async function getPRReviews(owner: string, name: string, number: number) {
+  const data = await githubClient.request<PRReviewsResponse>(GET_PR_REVIEWS, {
+    owner,
+    name,
+    number,
+  });
+  return data.repository.pullRequest;
 }

@@ -1,0 +1,63 @@
+import DataLoader from 'dataloader';
+import { githubClient } from '../github/client';
+import { gql } from 'graphql-request';
+
+interface PRKey {
+  owner: string;
+  name: string;
+  number: number;
+}
+
+interface PRResult {
+  number: number;
+  title: string;
+  author: { login: string } | null;
+  reviews: { nodes: { state: string; author: { login: string } | null }[] };
+}
+
+// Builds one GraphQL query that fetches MANY PRs at once using aliases,
+// e.g. pr0: pullRequest(number: 123) { ... }, pr1: pullRequest(number: 456) { ... }
+async function batchGetPRReviews(keys: readonly PRKey[]): Promise<PRResult[]> {
+  console.log(`[DataLoader] Batching ${keys.length} PR review fetches into 1 request`);
+
+  // All keys in a batch share the same owner/name in our use case,
+  // but we handle the general case safely.
+  const { owner, name } = keys[0];
+
+  const aliasedFields = keys
+    .map(
+      (k, i) => `
+    pr${i}: pullRequest(number: ${k.number}) {
+      number
+      title
+      author { login }
+      reviews(first: 5) {
+        nodes {
+          state
+          author { login }
+        }
+      }
+    }`
+    )
+    .join('\n');
+
+  const query = gql`
+    query BatchPRReviews {
+      repository(owner: "${owner}", name: "${name}") {
+        ${aliasedFields}
+      }
+    }
+  `;
+
+  const data = await githubClient.request<Record<string, any>>(query);
+  const repo = data.repository;
+
+  return keys.map((_, i) => repo[`pr${i}`]);
+}
+
+export function createPRReviewsLoader() {
+  return new DataLoader<PRKey, PRResult>(batchGetPRReviews, {
+    // Custom cache key since DataLoader defaults to using the key object by reference
+    cacheKeyFn: (key) => `${key.owner}/${key.name}#${key.number}`,
+  });
+}
